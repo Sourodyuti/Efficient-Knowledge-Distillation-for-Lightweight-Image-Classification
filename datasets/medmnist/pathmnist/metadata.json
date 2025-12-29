@@ -1,0 +1,24 @@
+{
+    "dataset": "pathmnist",
+    "description": "The PathMNIST is based on a prior study for predicting survival from colorectal cancer histology slides, providing a dataset (NCT-CRC-HE-100K) of 100,000 non-overlapping image patches from hematoxylin & eosin stained histological images, and a test dataset (CRC-VAL-HE-7K) of 7,180 image patches from a different clinical center. The dataset is comprised of 9 types of tissues, resulting in a multi-class classification task. We resize the source images of 3\u00d7224\u00d7224 into 3\u00d728\u00d728, and split NCT-CRC-HE-100K into training and validation set with a ratio of 9:1. The CRC-VAL-HE-7K is treated as the test set.",
+    "task": "multi-class",
+    "num_classes": 9,
+    "class_names": {
+        "0": "adipose",
+        "1": "background",
+        "2": "debris",
+        "3": "lymphocytes",
+        "4": "mucus",
+        "5": "smooth muscle",
+        "6": "normal colon mucosa",
+        "7": "cancer-associated stroma",
+        "8": "colorectal adenocarcinoma epithelium"
+    },
+    "train_samples": 89996,
+    "val_samples": 10004,
+    "test_samples": 7180,
+    "image_size": "224x224 (resized from 28x28 or 64x64)",
+    "normalization": "ImageNet (mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])",
+    "seed": 42,
+    "prepared": true
+}

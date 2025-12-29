@@ -1,0 +1,44 @@
+Vit Base (Teacher)
+
+
+CUBLAS_WORKSPACE_CONFIG set to :4096:8 for deterministic CUDA operations
+PyTorch configured for deterministic operations
+  cudnn.deterministic = True
+  cudnn.benchmark = False
+  use_deterministic_algorithms = True
+Random seed set to 42 for reproducibility
+
+Loading cifar10...
+
+Dataloaders created:
+  Train: 45000 samples (5625 batches)
+  Val:   5000 samples (625 batches)
+  Test:  10000 samples (1250 batches)
+  Batch size: 8
+  Num workers: 4
+Dataset loaded: 10 classes
+Batch size: 8 (optimized for 6GB VRAM)
+
+======================================================================
+Starting training: TEACHER - VIT_BASE
+GPU: NVIDIA GeForce RTX 4050 Laptop GPU
+======================================================================
+
+============================================================
+GPU Monitor Summary
+============================================================
+Device ID:   0
+Device Name: NVIDIA GeForce RTX 4050 Laptop GPU
+Compute Cap: (8, 9)
+
+Memory Usage:
+  Allocated: 0.0 MB
+  Reserved:  0.0 MB
+============================================================
+
+
+Building vit_base...
+Memory optimization: Gradient checkpointing + Mixed precision
+Total parameters: 85,806,346
+Trainable parameters: 85,806,346
+Estimated memory (FP16 + grad): ~491.0 MB
