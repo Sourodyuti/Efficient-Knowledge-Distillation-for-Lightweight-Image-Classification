@@ -7,13 +7,14 @@
 
 A **production-ready** knowledge distillation framework for training lightweight image classification models, with special optimization for **6GB VRAM** GPUs (RTX 4050).
 
-## 🎓 Overview
+## 🎯 Overview
 
 This framework implements complete **Teacher → Assistant → Student** knowledge distillation pipelines for both:
 - **CNNs** (ResNet-50 → ResNet-34 → ResNet-18)
 - **Vision Transformers** (ViT-Base → ViT-Small → ViT-Tiny)
 
 **Key Features:**
+- ✅ **Automatic dataset download and preprocessing**
 - ✅ Memory-optimized for 6GB VRAM (gradient checkpointing + mixed precision)
 - ✅ Sequential distillation pipeline
 - ✅ Comprehensive metrics tracking
@@ -25,7 +26,7 @@ This framework implements complete **Teacher → Assistant → Student** knowled
 
 ## 🚀 Quick Start
 
-### Installation
+### 1. Installation
 
 ```bash
 # Clone repository
@@ -34,12 +35,47 @@ cd Efficient-Knowledge-Distillation-for-Lightweight-Image-Classification
 
 # Install dependencies
 pip install -r requirements.txt
+```
 
-# Prepare datasets
+### 2. 📦 Prepare Datasets (Automatic)
+
+```bash
+# Automatically download and prepare datasets
 python dataset_prepare.py --all
 ```
 
-### Train Your First Model
+**What this does:**
+- ✅ **Automatically downloads** CIFAR-10 (~170 MB)
+- ✅ **Automatically downloads** PathMNIST (~50 MB)
+- ✅ Verifies data integrity
+- ✅ Prepares datasets for training
+- ✅ Shows progress and status
+
+**Time:** ~5-10 minutes (depending on internet speed)  
+**Size:** ~200-400 MB total
+
+**See full documentation:** [DATASET_SETUP.md](DATASET_SETUP.md)
+
+#### Dataset Options
+
+```bash
+# List available datasets
+python dataset_prepare.py --list
+
+# Prepare only CIFAR-10
+python dataset_prepare.py --cifar10
+
+# Prepare specific MedMNIST datasets
+python dataset_prepare.py --medmnist pathmnist chestmnist
+
+# Verify prepared datasets
+python dataset_prepare.py --verify
+
+# Force re-download
+python dataset_prepare.py --all --force
+```
+
+### 3. Train Your First Model
 
 **CNN (ResNet-18 Student):**
 ```bash
@@ -53,7 +89,7 @@ cd vit_distillation
 python train.py --dataset cifar10 --stage student --batch-size 32 --mixed-precision
 ```
 
-### Generate Plots
+### 4. Generate Plots
 
 ```bash
 python -c "from src.analysis.plot_curves import create_all_plots; create_all_plots('cnn_distillation', 'cnn', 'cifar10', True)"
@@ -64,7 +100,9 @@ python -c "from src.analysis.plot_curves import create_all_plots; create_all_plo
 ## 📚 Documentation
 
 ### Complete Guides
+- **[Dataset Setup Guide](DATASET_SETUP.md)** - 🆕 **Automatic dataset download**
 - **[Final Usage Guide](FINAL_USAGE_GUIDE.md)** - Comprehensive usage instructions
+- **[Critical Fixes](CRITICAL_FIXES.md)** - Production hardening documentation
 - **[CNN Pipeline](cnn_distillation/README.md)** - ResNet distillation details
 - **[ViT Pipeline](vit_distillation/README.md)** - Vision Transformer with 6GB VRAM optimization
 - **[Phase 3 Summary](PHASE3_SUMMARY.md)** - CNN implementation details
@@ -78,6 +116,7 @@ python -c "from src.analysis.plot_curves import create_all_plots; create_all_plo
 ### Knowledge Distillation
 - **Sequential distillation**: Teacher → Assistant → Student
 - **Soft target learning**: Temperature-scaled softmax
+- **Dynamic alpha scheduling**: More KD early, more CE later
 - **Balanced loss**: Configurable α between KD and CE loss
 - **Flexible temperature**: Default T=4.0
 
@@ -89,16 +128,18 @@ python -c "from src.analysis.plot_curves import create_all_plots; create_all_plo
 | **ViT** | ViT-Base (86M) | ViT-Small (22M) | ViT-Tiny (5M) |
 
 ### Datasets
-- **CIFAR-10**: 60K images, 10 classes
-- **MedMNIST**: Multiple medical imaging subsets
+- **CIFAR-10**: 60K images, 10 classes (automatic download)
+- **MedMNIST**: 12 medical imaging subsets (automatic download)
+  - PathMNIST, ChestMNIST, DermaMNIST, OctMNIST, etc.
 - Extensible to custom datasets
 
 ### Memory Optimization (6GB VRAM)
-- **Gradient Checkpointing**: Saves ~40% memory
+- **Gradient Checkpointing**: Saves ~40% memory (enforced for ViT-Base)
 - **Mixed Precision (AMP)**: FP16 reduces memory by ~50%
 - **Optimized Batch Sizes**: Auto-adjusted per model
 - **Efficient Attention**: Memory-efficient ViT implementation
-- **Aggressive Cleanup**: CUDA cache clearing every 10 epochs
+- **Aggressive Cleanup**: CUDA cache clearing between stages
+- **Teacher Freezing**: Saves ~100MB per distillation stage
 
 ### Metrics and Logging
 Per-epoch tracking of:
@@ -106,13 +147,20 @@ Per-epoch tracking of:
 - Training and validation loss
 - Learning rate
 - Epoch time
-- GPU memory usage
+- GPU memory usage (per-epoch peak)
 
 ### Visualization
 - **CNN**: Feature map visualization
 - **ViT**: Multi-head attention maps, attention rollout
 - **Plots**: Accuracy/loss/F1 vs epoch curves
 - **Comparisons**: Multi-model performance analysis
+
+### Production Safety
+- **NaN/Inf detection**: Immediate error on invalid loss
+- **Memory guards**: Full cleanup between training stages
+- **CSV schema validation**: No silent logging corruption
+- **Model-specific LR**: Auto-adjusted learning rates
+- **Reproducibility**: Central seed locking
 
 ---
 
@@ -153,7 +201,7 @@ Efficient-Knowledge-Distillation-for-Lightweight-Image-Classification/
 │   │   ├── cnn/          # ResNet models
 │   │   └── vit/          # Vision Transformer models
 │   ├── distillation/     # KD loss and metrics
-│   ├── utils/            # Logging, GPU monitoring, reproducibility
+│   ├── utils/            # Logging, GPU monitoring, training guards
 │   ├── visualization/    # Feature maps, attention visualization
 │   └── analysis/         # Plotting and performance analysis
 ├── cnn_distillation/
@@ -176,10 +224,12 @@ Efficient-Knowledge-Distillation-for-Lightweight-Image-Classification/
 │   ├── train.py
 │   ├── clean.sh
 │   └── README.md
-├── datasets/
-├── dataset_prepare.py
+├── datasets/             # Auto-downloaded datasets
+├── dataset_prepare.py    # 🆕 Automatic dataset downloader
 ├── validate_project.py
 ├── requirements.txt
+├── DATASET_SETUP.md      # Dataset preparation guide
+├── CRITICAL_FIXES.md     # Production hardening docs
 ├── FINAL_USAGE_GUIDE.md
 └── README.md
 ```
@@ -191,14 +241,14 @@ Efficient-Knowledge-Distillation-for-Lightweight-Image-Classification/
 ### Example 1: Train Full CNN Pipeline
 
 ```bash
-# Prepare datasets
+# 1. Prepare datasets (automatic download)
 python dataset_prepare.py --all
 
-# Train Teacher → Assistant → Student
+# 2. Train Teacher → Assistant → Student
 cd cnn_distillation
 python train.py --dataset cifar10 --pretrained --stage all --epochs 300
 
-# Generate plots
+# 3. Generate plots
 cd ..
 python -c "from src.analysis.plot_curves import create_all_plots; create_all_plots('cnn_distillation', 'cnn', 'cifar10', True)"
 ```
@@ -206,25 +256,42 @@ python -c "from src.analysis.plot_curves import create_all_plots; create_all_plo
 ### Example 2: Train ViT Pipeline (6GB VRAM)
 
 ```bash
-# Clear GPU memory
+# 1. Prepare datasets
+python dataset_prepare.py --all
+
+# 2. Clear GPU memory
 cd vit_distillation
 bash clean.sh
 
-# Train Teacher (ViT-Base) - CRITICAL: batch size 8 for 6GB VRAM
+# 3. Train Teacher (ViT-Base) - CRITICAL: batch size 8 for 6GB VRAM
 python train.py --dataset cifar10 --pretrained --stage teacher --batch-size 8 --epochs 100
 
-# Train Assistant (ViT-Small)
+# 4. Train Assistant (ViT-Small)
 python train.py --dataset cifar10 --pretrained --stage assistant --batch-size 16 --epochs 100
 
-# Train Student (ViT-Tiny)
+# 5. Train Student (ViT-Tiny)
 python train.py --dataset cifar10 --pretrained --stage student --batch-size 32 --epochs 100
 
-# Generate plots
+# 6. Generate plots
 cd ..
 python -c "from src.analysis.plot_curves import create_all_plots; create_all_plots('vit_distillation', 'vit', 'cifar10', True)"
 ```
 
-### Example 3: Custom Analysis
+### Example 3: Custom Dataset Preparation
+
+```bash
+# Prepare specific medical imaging datasets
+python dataset_prepare.py --medmnist pathmnist chestmnist dermamnist
+
+# Verify all datasets
+python dataset_prepare.py --verify
+
+# Train on specific dataset
+cd cnn_distillation
+python train.py --dataset pathmnist --stage teacher --epochs 200
+```
+
+### Example 4: Custom Analysis
 
 ```python
 from src.analysis.plot_curves import (
@@ -302,6 +369,19 @@ python vit_distillation/train.py \
 
 ## 🐛 Troubleshooting
 
+### Dataset Download Fails
+
+```bash
+# Check internet connection
+ping google.com
+
+# Try again (resumes automatically)
+python dataset_prepare.py --all
+
+# Force re-download
+python dataset_prepare.py --all --force
+```
+
 ### CUDA Out of Memory (ViT)
 
 ```bash
@@ -328,7 +408,10 @@ python train.py --pretrained
 python train.py --lr 1e-4
 ```
 
-For more troubleshooting, see [FINAL_USAGE_GUIDE.md](FINAL_USAGE_GUIDE.md).
+For more troubleshooting, see:
+- [DATASET_SETUP.md](DATASET_SETUP.md) - Dataset issues
+- [FINAL_USAGE_GUIDE.md](FINAL_USAGE_GUIDE.md) - Training issues
+- [CRITICAL_FIXES.md](CRITICAL_FIXES.md) - Memory and stability issues
 
 ---
 
@@ -342,9 +425,9 @@ python validate_project.py
 
 Checks:
 - ✅ Folder isolation (CNN/ViT separate)
-- ✅ Dataset immutability
-- ✅ Log consistency
-- ✅ Code structure
+- ✅ Dataset immutability (read-only access)
+- ✅ Log consistency (required columns)
+- ✅ Code structure (all modules)
 - ✅ Documentation completeness
 
 ---
@@ -401,6 +484,8 @@ For questions or issues:
 - ✅ Phase 3: CNN Distillation - **Complete**
 - ✅ Phase 4: ViT Distillation (6GB VRAM) - **Complete**
 - ✅ Phase 5: Finalization - **Complete**
+- ✅ Phase 6: Production Hardening - **Complete**
+- ✅ Automatic Dataset Preparation - **Complete**
 
 **Status: Production Ready ✅**
 
