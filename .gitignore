@@ -1,0 +1,140 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+PIPFILE.lock
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# PyCharm
+.idea/
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# Dataset files (large binaries)
+datasets/cifar10/cifar-10-batches-py/
+datasets/cifar10/cifar-10-python.tar.gz
+datasets/medmnist/*/*.npz
+datasets/medmnist/*/*.tar.gz
+
+# Keep metadata
+!datasets/**/metadata.json
+!datasets/README.md
+
+# Experiment outputs (checkpoints, logs, visualizations)
+experiments/*/
+!experiments/.gitkeep
+
+# TensorBoard logs
+runs/
+logs/
+tensorboard/
+*.tfevents.*
+
+# Model checkpoints
+*.pth
+*.pt
+*.ckpt
+*.weights
+*.pkl
+*.h5
+
+# Training outputs
+*.csv
+*.log
+
+# Visualizations
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.pdf
+
+# System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# CUDA/GPU
+*.ptx
+*.cubin
+
+# Coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Profiling
+*.prof
+*.lprof
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Documentation builds
+docs/_build/
+docs/_static/
+docs/_templates/
+
+# Backup files
+*.bak
+*.backup
+
+# Compressed files
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
