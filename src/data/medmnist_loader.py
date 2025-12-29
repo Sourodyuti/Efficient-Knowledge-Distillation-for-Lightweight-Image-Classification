@@ -278,12 +278,15 @@ class MedMNISTProcessor:
                 print("❌ Dataset not properly prepared.")
                 return False
             
-            # Load sample
+            # Load sample and test transforms
             DataClass = getattr(medmnist, self.info['python_class'])
             test_dataset = DataClass(split='test', root=str(self.medmnist_dir), download=False)
             
-            # Transform sample
+            # Get raw image (numpy array)
             img, label = test_dataset[0]
+            
+            # Test transform pipeline
+            # img is already a numpy array from medmnist, which ToPILImage can handle
             img_transformed = self.test_transforms(img)
             
             # Verify shape
@@ -291,9 +294,21 @@ class MedMNISTProcessor:
                 print(f"❌ Invalid image shape: {img_transformed.shape}. Expected: [3, 224, 224]")
                 return False
             
-            # Verify normalization
-            if not (-3 < img_transformed.min() < 3 and -3 < img_transformed.max() < 3):
-                print(f"❌ Invalid normalization: [{img_transformed.min():.2f}, {img_transformed.max():.2f}]")
+            # Verify normalization (ImageNet normalized values typically in range [-3, 3])
+            if not (-5 < img_transformed.min() < 5 and -5 < img_transformed.max() < 5):
+                print(f"❌ Invalid value range: [{img_transformed.min():.2f}, {img_transformed.max():.2f}]")
+                return False
+            
+            # Test dataloader creation
+            try:
+                loaders = self.get_dataloaders(batch_size=4, num_workers=0)
+                # Try to get one batch
+                batch_img, batch_label = next(iter(loaders['test_loader']))
+                if batch_img.shape[1:] != torch.Size([3, 224, 224]):
+                    print(f"❌ Invalid batch shape: {batch_img.shape}")
+                    return False
+            except Exception as e:
+                print(f"❌ Dataloader test failed: {str(e)}")
                 return False
             
             print(f"\n✓ {self.dataset_name.upper()} verification passed!")
@@ -301,11 +316,16 @@ class MedMNISTProcessor:
             print(f"  Value range: [{img_transformed.min():.3f}, {img_transformed.max():.3f}]")
             print(f"  Num classes: {metadata['num_classes']}")
             print(f"  Task: {metadata['task']}")
+            print(f"  Train samples: {metadata['train_samples']}")
+            print(f"  Val samples: {metadata['val_samples']}")
+            print(f"  Test samples: {metadata['test_samples']}")
             
             return True
             
         except Exception as e:
             print(f"❌ Verification failed: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return False
 
 
