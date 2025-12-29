@@ -76,9 +76,8 @@ class MedMNISTProcessor:
             std=[0.229, 0.224, 0.225]
         )
         
-        # Training transforms
+        # Training transforms (NO ToPILImage - medmnist returns PIL Images)
         self.train_transforms = transforms.Compose([
-            transforms.ToPILImage(),
             transforms.Resize(256),
             transforms.RandomCrop(224),
             transforms.RandomHorizontalFlip(p=0.5),
@@ -88,9 +87,8 @@ class MedMNISTProcessor:
             self.normalize
         ])
         
-        # Test transforms
+        # Test transforms (NO ToPILImage - medmnist returns PIL Images)
         self.test_transforms = transforms.Compose([
-            transforms.ToPILImage(),
             transforms.Resize(256),
             transforms.CenterCrop(224),
             transforms.ToTensor(),
@@ -282,11 +280,20 @@ class MedMNISTProcessor:
             DataClass = getattr(medmnist, self.info['python_class'])
             test_dataset = DataClass(split='test', root=str(self.medmnist_dir), download=False)
             
-            # Get raw image (numpy array)
+            # Get raw image (medmnist returns PIL Image)
             img, label = test_dataset[0]
             
-            # Test transform pipeline
-            # img is already a numpy array from medmnist, which ToPILImage can handle
+            # Verify that medmnist returns PIL Image
+            if not isinstance(img, Image.Image):
+                print(f"⚠️  Warning: Expected PIL Image, got {type(img)}")
+                print(f"   Converting to PIL Image...")
+                if isinstance(img, np.ndarray):
+                    img = Image.fromarray(img)
+                else:
+                    print(f"❌ Cannot convert {type(img)} to PIL Image")
+                    return False
+            
+            # Test transform pipeline (img is already PIL Image, no ToPILImage needed)
             img_transformed = self.test_transforms(img)
             
             # Verify shape
@@ -309,6 +316,8 @@ class MedMNISTProcessor:
                     return False
             except Exception as e:
                 print(f"❌ Dataloader test failed: {str(e)}")
+                import traceback
+                traceback.print_exc()
                 return False
             
             print(f"\n✓ {self.dataset_name.upper()} verification passed!")
