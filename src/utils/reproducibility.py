@@ -5,6 +5,7 @@ Ensures deterministic training by:
 - Setting random seeds across all libraries
 - Configuring PyTorch for deterministic operations
 - Disabling non-deterministic algorithms
+- Setting CUBLAS workspace config for deterministic CUDA operations
 
 Framework-agnostic.
 """
@@ -78,6 +79,14 @@ def set_deterministic(
         >>> set_deterministic(deterministic=True, benchmark=False)
         PyTorch configured for deterministic operations
     """
+    # CRITICAL: Set CUBLAS workspace config BEFORE any CUDA operations
+    # This is required for deterministic behavior with CUDA >= 10.2
+    if deterministic and torch.cuda.is_available():
+        # Use :4096:8 for better performance, :16:8 for less memory
+        os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
+        if verbose:
+            print("CUBLAS_WORKSPACE_CONFIG set to :4096:8 for deterministic CUDA operations")
+    
     if torch.cuda.is_available():
         # CuDNN settings
         torch.backends.cudnn.deterministic = deterministic
@@ -123,14 +132,16 @@ def setup_reproducibility(
     
     Example:
         >>> setup_reproducibility(seed=42, deterministic=True)
+        CUBLAS_WORKSPACE_CONFIG set to :4096:8 for deterministic CUDA operations
         Random seed set to 42 for reproducibility
         PyTorch configured for deterministic operations
           cudnn.deterministic = True
           cudnn.benchmark = False
           use_deterministic_algorithms = True
     """
-    set_seed(seed, verbose=verbose)
+    # IMPORTANT: Set deterministic FIRST (sets CUBLAS env var)
     set_deterministic(deterministic, benchmark, verbose=verbose)
+    set_seed(seed, verbose=verbose)
 
 
 def get_random_state() -> dict:
@@ -206,9 +217,9 @@ if __name__ == "__main__":
     # Test reproducibility utilities
     print("Testing Reproducibility Utilities...\n")
     
-    # Test seed setting
-    print("[1/4] Testing set_seed()...")
-    set_seed(42, verbose=True)
+    # Test complete setup (order matters!)
+    print("[1/4] Testing setup_reproducibility()...")
+    setup_reproducibility(seed=42, deterministic=True, verbose=True)
     
     # Generate random numbers
     print("\nGenerating random numbers:")
@@ -229,12 +240,8 @@ if __name__ == "__main__":
     else:
         print("❌ Reproducibility failed!")
     
-    # Test deterministic config
-    print("\n[3/4] Testing set_deterministic()...")
-    set_deterministic(deterministic=True, benchmark=False, verbose=True)
-    
     # Test state save/restore
-    print("\n[4/4] Testing state save/restore...")
+    print("\n[3/4] Testing state save/restore...")
     set_seed(42, verbose=False)
     state = get_random_state()
     val1 = torch.rand(3)
@@ -251,9 +258,21 @@ if __name__ == "__main__":
     else:
         print("❌ State save/restore failed!")
     
-    # Test complete setup
-    print("\n[Bonus] Testing setup_reproducibility()...")
-    setup_reproducibility(seed=123, deterministic=True, verbose=False)
-    print("✓ Complete setup successful!")
+    # Test CUDA deterministic operations
+    if torch.cuda.is_available():
+        print("\n[4/4] Testing CUDA deterministic operations...")
+        device = torch.device('cuda')
+        x = torch.randn(2, 2, device=device)
+        y = torch.randn(2, 2, device=device)
+        
+        # This should work with CUBLAS_WORKSPACE_CONFIG set
+        try:
+            z = torch.mm(x, y)
+            print("✓ CUDA deterministic operations working!")
+            print(f"  CUBLAS_WORKSPACE_CONFIG = {os.environ.get('CUBLAS_WORKSPACE_CONFIG', 'Not set')}")
+        except RuntimeError as e:
+            print(f"❌ CUDA deterministic test failed: {e}")
+    else:
+        print("\n[4/4] Skipping CUDA tests (no GPU available)")
     
     print("\n✓ All tests passed!")
