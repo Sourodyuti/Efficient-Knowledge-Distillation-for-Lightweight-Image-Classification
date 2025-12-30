@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-ViT Knowledge Distillation Training Script
+ViT and ResNet Knowledge Distillation Training Script
 
 Implements Teacher → Assistant → Student distillation pipeline
-for ViT-Base → ViT-Small → ViT-Tiny.
+Supports both ViT (ViT-Base → ViT-Small → ViT-Tiny) and ResNet architectures.
 
 Memory-optimized for 6GB VRAM:
 - Gradient checkpointing
@@ -12,11 +12,11 @@ Memory-optimized for 6GB VRAM:
 - Efficient attention
 
 Usage:
-    # Train full pipeline
-    python train.py --dataset cifar10 --pretrained --stage all
+    # Train ViT pipeline
+    python train.py --dataset cifar10 --pretrained --stage teacher --model vit_base
     
-    # Train specific stage
-    python train.py --dataset cifar10 --pretrained --stage teacher --batch-size 8
+    # Train ResNet pipeline
+    python train.py --dataset cifar10 --pretrained --stage teacher --model resnet50
 """
 
 import argparse
@@ -36,7 +36,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.data.cifar10_loader import CIFAR10Processor
 from src.data.medmnist_loader import MedMNISTProcessor
-from src.models.vit.vit_models import get_vit_model, get_model_info
 from src.distillation.kd_loss import KnowledgeDistillationLoss
 from src.distillation.metrics import MetricsCalculator
 from src.utils.logger import EpochLogger
@@ -45,9 +44,9 @@ from src.utils.gpu_monitor import get_gpu_memory_usage, GPUMonitor
 from src.utils.memory_cleanup import full_cleanup
 
 
-class ViTTrainer:
+class ModelTrainer:
     """
-    ViT Knowledge Distillation Trainer.
+    Knowledge Distillation Trainer for ViT and ResNet.
     
     Optimized for 6GB VRAM:
     - Gradient checkpointing enabled by default
@@ -161,27 +160,51 @@ echo "Cleanup complete!"
         self.class_names = loaders['class_names']
         
         print(f"Dataset loaded: {self.num_classes} classes")
-        print(f"Batch size: {self.args.batch_size} (optimized for 6GB VRAM)")
+        print(f"Batch size: {self.args.batch_size}")
     
     def build_model(self):
         """Build student model and optionally load teacher."""
         print(f"\nBuilding {self.args.model}...")
         print("Memory optimization: Gradient checkpointing + Mixed precision")
         
-        # Create student model with gradient checkpointing
-        self.model = get_vit_model(
-            model_name=self.args.model,
-            num_classes=self.num_classes,
-            pretrained=self.args.pretrained and self.args.stage == 'teacher',
-            gradient_checkpointing=True  # Always enable for 6GB VRAM
-        )
-        self.model = self.model.to(self.device)
+        # Determine model type
+        is_vit = self.args.model.startswith('vit_')
+        is_resnet = self.args.model.startswith('resnet')
         
-        # Print model info
-        info = get_model_info(self.model)
-        print(f"Total parameters: {info['total_params']:,}")
-        print(f"Trainable parameters: {info['trainable_params']:,}")
-        print(f"Estimated memory (FP16 + grad): ~{info['memory_fp16_mb'] * 3:.1f} MB")
+        # Create student model
+        if is_vit:
+            from src.models.vit.vit_models import get_vit_model, get_model_info
+            self.model = get_vit_model(
+                model_name=self.args.model,
+                num_classes=self.num_classes,
+                pretrained=self.args.pretrained and self.args.stage == 'teacher',
+                gradient_checkpointing=True
+            )
+            self.model = self.model.to(self.device)
+            
+            # Print model info
+            info = get_model_info(self.model)
+            print(f"Total parameters: {info['total_params']:,}")
+            print(f"Trainable parameters: {info['trainable_params']:,}")
+            print(f"Estimated memory (FP16 + grad): ~{info['memory_fp16_mb'] * 3:.1f} MB")
+            
+        elif is_resnet:
+            from src.models.cnn.resnet import get_resnet_model
+            self.model = get_resnet_model(
+                model_name=self.args.model,
+                num_classes=self.num_classes,
+                pretrained=self.args.pretrained and self.args.stage == 'teacher'
+            )
+            self.model = self.model.to(self.device)
+            
+            # Print model info
+            total_params = sum(p.numel() for p in self.model.parameters())
+            trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+            print(f"Total parameters: {total_params:,}")
+            print(f"Trainable parameters: {trainable_params:,}")
+            
+        else:
+            raise ValueError(f"Unknown model type: {self.args.model}. Must start with 'vit_' or 'resnet'")
         
         # Load teacher for distillation
         if self.args.stage in ['assistant', 'student']:
@@ -192,12 +215,27 @@ echo "Cleanup complete!"
                 raise FileNotFoundError(f"Teacher checkpoint not found for {self.args.stage}")
             
             print(f"\nLoading teacher from {teacher_checkpoint}")
-            self.teacher_model = get_vit_model(
-                model_name=teacher_model_name,
-                num_classes=self.num_classes,
-                pretrained=False,
-                gradient_checkpointing=True
-            )
+            
+            # Determine teacher model type
+            teacher_is_vit = teacher_model_name.startswith('vit_')
+            teacher_is_resnet = teacher_model_name.startswith('resnet')
+            
+            if teacher_is_vit:
+                from src.models.vit.vit_models import get_vit_model
+                self.teacher_model = get_vit_model(
+                    model_name=teacher_model_name,
+                    num_classes=self.num_classes,
+                    pretrained=False,
+                    gradient_checkpointing=True
+                )
+            elif teacher_is_resnet:
+                from src.models.cnn.resnet import get_resnet_model
+                self.teacher_model = get_resnet_model(
+                    model_name=teacher_model_name,
+                    num_classes=self.num_classes,
+                    pretrained=False
+                )
+            
             self.teacher_model.load_state_dict(torch.load(teacher_checkpoint, map_location=self.device))
             self.teacher_model = self.teacher_model.to(self.device)
             self.teacher_model.eval()
@@ -228,7 +266,7 @@ echo "Cleanup complete!"
     
     def build_optimizer(self):
         """Build optimizer and scheduler."""
-        # Use AdamW with weight decay for ViT
+        # Use AdamW with weight decay
         if self.args.optimizer == 'adamw':
             self.optimizer = optim.AdamW(
                 self.model.parameters(), 
@@ -421,7 +459,7 @@ echo "Cleanup complete!"
             if epoch % self.args.save_interval == 0 or is_best:
                 self.save_checkpoint(epoch, val_metrics, is_best)
             
-            # Aggressive memory cleanup for ViT
+            # Aggressive memory cleanup
             if epoch % 10 == 0:
                 torch.cuda.empty_cache()
                 gc.collect()
@@ -434,27 +472,27 @@ echo "Cleanup complete!"
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='ViT Knowledge Distillation Training')
+    parser = argparse.ArgumentParser(description='Knowledge Distillation Training (ViT & ResNet)')
     
     # Dataset
     parser.add_argument('--dataset', type=str, default='cifar10', help='Dataset name')
-    parser.add_argument('--num-workers', type=int, default=2, help='DataLoader workers (reduced for ViT)')
+    parser.add_argument('--num-workers', type=int, default=4, help='DataLoader workers')
     
     # Model
     parser.add_argument('--stage', type=str, required=True, choices=['teacher', 'assistant', 'student', 'all'])
-    parser.add_argument('--model', type=str, help='Model name (auto-selected based on stage)')
+    parser.add_argument('--model', type=str, help='Model name (e.g., vit_base, resnet50)')
     parser.add_argument('--model-teacher', type=str, default='vit_base', help='Teacher model')
     parser.add_argument('--model-assistant', type=str, default='vit_small', help='Assistant model')
     parser.add_argument('--model-student', type=str, default='vit_tiny', help='Student model')
     parser.add_argument('--pretrained', action='store_true', help='Use ImageNet pretrained weights')
     
-    # Training (optimized for 6GB VRAM)
+    # Training
     parser.add_argument('--epochs', type=int, default=100, help='Number of epochs')
-    parser.add_argument('--batch-size', type=int, default=8, help='Batch size (8 for ViT-Base on 6GB)')
-    parser.add_argument('--lr', type=float, default=3e-4, help='Learning rate (ViT default)')
+    parser.add_argument('--batch-size', type=int, default=32, help='Batch size')
+    parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
     parser.add_argument('--optimizer', type=str, default='adamw', choices=['adam', 'adamw', 'sgd'])
     parser.add_argument('--scheduler', type=str, default='cosine', choices=['cosine', 'step', 'none'])
-    parser.add_argument('--weight-decay', type=float, default=0.05, help='Weight decay (ViT default)')
+    parser.add_argument('--weight-decay', type=float, default=0.1, help='Weight decay')
     
     # Knowledge Distillation
     parser.add_argument('--temperature', type=float, default=4.0, help='KD temperature')
@@ -488,33 +526,25 @@ def main():
         elif args.stage == 'student':
             args.model = args.model_student
     
-    # Validate batch size for 6GB VRAM
-    if args.model == 'vit_base' and args.batch_size > 8:
-        print(f"Warning: Batch size {args.batch_size} may cause OOM on 6GB VRAM.")
-        print("Recommended batch size for ViT-Base: 8 or less")
-    
     # Train all stages sequentially
     if args.stage == 'all':
         for stage in ['teacher', 'assistant', 'student']:
             args.stage = stage
             if stage == 'teacher':
                 args.model = args.model_teacher
-                args.batch_size = 8 if args.model == 'vit_base' else 16
             elif stage == 'assistant':
                 args.model = args.model_assistant
-                args.batch_size = 16
             else:
                 args.model = args.model_student
-                args.batch_size = 32
             
-            trainer = ViTTrainer(args)
+            trainer = ModelTrainer(args)
             trainer.train()
             
             # Cleanup between stages
             full_cleanup(verbose=True)
     else:
         # Train single stage
-        trainer = ViTTrainer(args)
+        trainer = ModelTrainer(args)
         trainer.train()
 
 
